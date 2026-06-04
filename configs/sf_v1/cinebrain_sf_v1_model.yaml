@@ -1,0 +1,217 @@
+model:
+  scale_factor: 0.7
+  disable_first_stage_autocast: true
+  not_trainable_prefixes: ['all']
+  log_keys:
+    - txt
+
+  denoiser_config:
+    target: sgm.modules.diffusionmodules.denoiser.DiscreteDenoiser
+    params:
+      num_idx: 1000
+      quantize_c_noise: False
+      weighting_config:
+        target: sgm.modules.diffusionmodules.denoiser_weighting.EpsWeighting
+      scaling_config:
+        target: sgm.modules.diffusionmodules.denoiser_scaling.VideoScaling
+      discretization_config:
+        target: sgm.modules.diffusionmodules.discretizer.ZeroSNRDDPMDiscretization
+        params:
+          shift_scale: 1.0
+
+  network_config:
+    target: dit_video_concat_fmri.DiffusionTransformer
+    params:
+      time_embed_dim: 512
+      elementwise_affine: True
+      num_frames: 49
+      time_compressed_rate: 4
+      latent_width: 90
+      latent_height: 60
+      num_layers: 42
+      patch_size: 2
+      in_channels: 16
+      out_channels: 16
+      hidden_size: 3072
+      adm_in_channels: 256
+      num_attention_heads: 48
+
+      transformer_args:
+        checkpoint_activations: True
+        vocab_size: 1
+        max_sequence_length: 64
+        layernorm_order: pre
+        skip_init: false
+        model_parallel_size: 1
+        is_decoder: false
+
+      modules:
+        pos_embed_config:
+          target: dit_video_concat_fmri.Rotary3DPositionEmbeddingMixin
+          params:
+            hidden_size_head: 64
+            text_length: 226
+
+        lora_config:
+          target: sat.model.finetune.lora2.LoraMixin
+          params:
+            r: 128
+            lora_alpha: 128
+
+        patch_embed_config:
+          target: dit_video_concat_fmri.ImagePatchEmbeddingMixin
+          params:
+            text_hidden_size: 4096
+
+        adaln_layer_config:
+          target: dit_video_concat_fmri.AdaLNMixin
+          params:
+            qk_ln: True
+
+        final_layer_config:
+          target: dit_video_concat_fmri.FinalLayerMixin
+
+  conditioner_config:
+    target: sgm.modules.GeneralConditioner
+    params:
+      emb_models:
+        - is_trainable: True
+          input_key: fmri
+          ucg_rate: 0.1
+          target: sgm.modules.encoders.sf_embedder.SFBrainEmbedder
+          params:
+            seq_len: 8405
+            num_spatial: 226
+            fmri_num_layers: 12
+            eeg_num_layers: 12
+            clip_dim: 1152
+            # SF v1 switches
+            use_slow_branch: true
+            use_fast_branch: true
+            use_gated_fusion: true
+            use_multi_guidance: true
+            # Slow branch
+            use_auditory: true
+            use_keyframe_head: true
+            use_scene_text_head: true
+            use_structure_head: true
+            # Fast branch
+            use_dynamics_head: true
+            use_motion_head: true
+            use_temporal_coherence_head: true  # no direct supervision (extraction bug), learns implicitly via guidance
+            use_direction_head: true
+            motion_pca_dim: 128
+            num_dyn_classes: 3
+            num_dir_classes: 8
+            # Fusion
+            fusion_hidden_dim: 2048
+            fusion_num_layers: 4
+            fixed_weights: false
+            # Guidance
+            use_keyframe_guidance: true
+            use_text_guidance: true
+            use_motion_guidance: true
+            use_brain_latent_guidance: true
+            # P1: Temporal dynamics
+            use_temporal_dynamics: true
+            num_temporal_queries: 9
+            temporal_d_model: 512
+            use_causal_mask: true
+            # Guidance
+            use_temporal_guidance: true
+            # Training mode
+            mode: infer
+            ckpt: ''
+            # Direction ① path A: expose pre-mix components so the sampler can
+            # remix crossattn per timestep when alpha_schedule is set. Safe in
+            # training (no premix consumer) and in v2-baseline inference
+            # (alpha_schedule left null → identical to static behavior).
+            expose_premix: true
+
+  first_stage_config:
+    target: vae_modules.autoencoder.VideoAutoencoderInferenceWrapper
+    params:
+      cp_size: 1
+      ckpt_path: __LOCAL_CONFIG_VAE__
+      ignore_keys: [ 'loss' ]
+      loss_config:
+        target: torch.nn.Identity
+      regularizer_config:
+        target: vae_modules.regularizers.DiagonalGaussianRegularizer
+      encoder_config:
+        target: vae_modules.cp_enc_dec.ContextParallelEncoder3D
+        params:
+          double_z: true
+          z_channels: 16
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult: [ 1, 2, 2, 4 ]
+          attn_resolutions: [ ]
+          num_res_blocks: 3
+          dropout: 0.0
+          gather_norm: True
+      decoder_config:
+        target: vae_modules.cp_enc_dec.ContextParallelDecoder3D
+        params:
+          double_z: True
+          z_channels: 16
+          resolution: 256
+          in_channels: 3
+          out_ch: 3
+          ch: 128
+          ch_mult: [ 1, 2, 2, 4 ]
+          attn_resolutions: [ ]
+          num_res_blocks: 3
+          dropout: 0.0
+          gather_norm: False
+
+  loss_fn_config:
+    target: sgm.modules.diffusionmodules.loss.VideoDiffusionLossSF
+    params:
+      offset_noise_level: 0
+      # SF v1 training stage: branch_pretrain | fusion | joint
+      training_stage: joint
+      # SF loss weights
+      sf_loss_config:
+        lambda_fv: 1.0
+        lambda_ft: 1.0
+        lambda_ev: 1.0
+        lambda_et: 1.0
+        lambda_fe: 0.5
+        lambda_key: 1.0
+        lambda_txt: 1.0
+        lambda_str: 1.0
+        lambda_dyn: 1.0
+        lambda_mot: 1.0
+        lambda_tc: 0.5
+        lambda_dir: 0.5
+        lambda_gk: 0.5
+        lambda_gt: 0.5
+        lambda_gm: 0.01  # lowered from 0.5: L_gm raw ~65 due to clamped EMA scale → 0.01*65=0.65 contribution, balanced with L_gk/L_gt
+      sigma_sampler_config:
+        target: sgm.modules.diffusionmodules.sigma_sampling.DiscreteSampling
+        params:
+          uniform_sampling: True
+          num_idx: 1000
+          discretization_config:
+            target: sgm.modules.diffusionmodules.discretizer.ZeroSNRDDPMDiscretization
+            params:
+              shift_scale: 1.0
+
+  sampler_config:
+    target: sgm.modules.diffusionmodules.sampling.VPSDEDPMPP2MSampler
+    params:
+      num_steps: 50
+      verbose: True
+      discretization_config:
+        target: sgm.modules.diffusionmodules.discretizer.ZeroSNRDDPMDiscretization
+        params:
+          shift_scale: 1.0
+      guider_config:
+        target: sgm.modules.diffusionmodules.guiders.DynamicCFG
+        params:
+          scale: 6
+          exp: 5
+          num_steps: 50

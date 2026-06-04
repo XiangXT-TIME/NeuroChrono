@@ -1,0 +1,3 @@
+args:
+  jsonpath: __LOCAL_CONFIG_DATASET_ROOT__/sub-0002_test_va.json
+  output_dir: results/pathB_sub0002_iter500

@@ -1,0 +1,8 @@
+args:
+  experiment_name: sf_v3_pathB_p1_sub06
+  load: ckpts_5b/sf_v3_pathB_init_sub06
+  train_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0006_train_va.json
+  valid_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0006_test_va.json
+  num_workers: 1

@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+
+# Model cache & checkpoints
+.cache/
+ckpts_5b/
+
+# Results & logs
+results/*
+!results/*.md
+!results/
+runs/
+logs/
+
+# Third-party tools
+common_metrics_on_video_quality/
+
+# Local config (server-specific paths)
+local_config.yaml
+
+# Temporary files
+*.swp
+*.swo
+*~
+
+# AI tool configs
+AGENTS.md
+CLAUDE.md
+
+# Debug workspaces
+tmp_dbg/
+
+# Backup files
+*.bak_*

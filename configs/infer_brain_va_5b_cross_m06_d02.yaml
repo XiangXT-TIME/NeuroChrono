@@ -1,0 +1,14 @@
+args:
+  latent_channels: 16
+  mode: inference
+  load: ./ckpts_5b/brain_lora_va_sub06
+  batch_size: 1
+  input_type: txt
+  input_file: configs/test.txt
+  sampling_image_size: [480, 720]
+  sampling_num_frames: 9
+  sampling_fps: 8
+  fp16: False
+  bf16: True
+  output_dir: results/cross_m06_d02
+  force_inference: True

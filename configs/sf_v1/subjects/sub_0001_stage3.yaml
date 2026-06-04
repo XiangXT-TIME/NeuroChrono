@@ -1,0 +1,8 @@
+args:
+  experiment_name: sf_v1_stage3_sub01
+  load: ckpts_5b/sf_v1_stage2_sub01
+  train_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0001_train_va.json
+  valid_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0001_test_va.json
+  num_workers: 1

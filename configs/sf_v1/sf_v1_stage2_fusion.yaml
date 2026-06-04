@@ -1,0 +1,92 @@
+args:
+  checkpoint_activations: true
+  eval_batch_size: 1
+  eval_interval: 500
+  eval_iters: 5
+  experiment_name: sf_v1_stage2_fusion
+  force_train: true
+  load: ckpts_5b/sf_v1_p1_full_v2-04-03-13-44
+  log_interval: 20
+  mode: finetune
+  model_parallel_size: 1
+  no_load_rng: true
+  num_workers: 2
+  only_log_video_latents: true
+  save: ckpts_5b
+  save_interval: 500
+  split: 1,0,0
+  train_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0005_train_va.json
+  train_iters: 2000
+  valid_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0005_test_va.json
+data:
+  params:
+    fps: 8
+    max_num_frames: 33
+    skip_frms_num: 0
+    video_size:
+    - 480
+    - 720
+    sf_target_keys:
+    - keyframe_img_emb
+    - scene_text_emb
+    - flow_token_pca
+    - dyn_class_3
+    - motion_dir_8
+    - ofs_log_zscore
+    - temporal_frame_embs
+    - flow_mag_traj
+  target: data_video.BrainDataset
+deepspeed:
+  activation_checkpointing:
+    contiguous_memory_optimization: false
+    partition_activations: false
+  bf16:
+    enabled: true
+  fp16:
+    enabled: false
+  gradient_accumulation_steps: 2
+  gradient_clipping: 0.1
+  hysteresis: 2
+  loss_scale: 0
+  loss_scale_window: 400
+  min_loss_scale: 1
+  optimizer:
+    params:
+      betas:
+      - 0.9
+      - 0.95
+      eps: 1e-8
+      lr: 0.0001
+      weight_decay: 1e-4
+    type: Adam
+  steps_per_print: 50
+  train_micro_batch_size_per_gpu: 1
+  wall_clock_breakdown: false
+  zero_allow_untested_optimizer: true
+  zero_optimization:
+    allgather_bucket_size: 1000000000
+    contiguous_gradients: false
+    cpu_offload: false
+    load_from_fp32_weights: false
+    overlap_comm: true
+    reduce_bucket_size: 1000000000
+    reduce_scatter: true
+    stage: 2
+model:
+  not_trainable_prefixes:
+  - all
+  freeze_slow_branch: true
+  freeze_fast_branch: true
+  unfreeze_fusion: true
+  loss_fn_config:
+    params:
+      training_stage: fusion
+      sf_loss_config:
+        lambda_distill_cls: 0.2
+        lambda_distill_spatial: 0.2
+        lambda_temporal_delta: 1.0
+        lambda_temporal_abs: 0.2
+        lambda_flow_traj: 0.3
+        lambda_dyn: 0.1

@@ -1,0 +1,6 @@
+# 2-GPU training override: double gradient_accumulation to match 4-GPU effective batch.
+# Effective batch = n_gpus × micro_batch × grad_accum
+#   4-GPU:  4 × 1 × 2 = 8
+#   2-GPU:  2 × 1 × 4 = 8
+deepspeed:
+  gradient_accumulation_steps: 4

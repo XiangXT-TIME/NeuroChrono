@@ -1,0 +1,121 @@
+# Direction ① Path B — P1 training (learned α(sample, τ), TimeNoise off)
+#
+# Usage:
+#   1. Run tools/partial_load_v2_to_pathB.py to create ckpts_5b/sf_v3_pathB_init/
+#      (pads gate_net[0].weight on t_emb columns with zeros for warm-start)
+#   2. Launch with both model + train YAMLs:
+#        --base configs/sf_v1/cinebrain_sf_v3_pathB_model.yaml \
+#               configs/sf_v1/sf_v3_pathB_train.yaml
+#
+# Phase plan:
+#   P1 (this config): 0 → 2000 iter, TimeNoise off. Validate α(τ) is learnable.
+#   P2: resume from P1, flip use_time_noise=true in model yaml.
+#   P3 (conditional on H** findings): add FlashI2V subtraction (see design §3.5).
+#
+# Freezing rationale (pragmatic relaxation of design §5.2):
+#   Strict design calls for only gate_net + t_emb_proj trainable. We unfreeze
+#   the entire gated_fusion module for simplicity (substring match in
+#   sf_trainable_keys). fusion_layers and output_proj are pretrained in v2 and
+#   lr=1e-5 × 2000 iter should not drift them materially; if it does we can
+#   add a finer freeze flag.
+args:
+  checkpoint_activations: true
+  eval_batch_size: 1
+  eval_interval: 500
+  eval_iters: 10
+  experiment_name: sf_v3_pathB_p1
+  force_train: true
+  load: ckpts_5b/sf_v3_pathB_init
+  log_interval: 20
+  mode: finetune
+  model_parallel_size: 1
+  no_load_rng: true
+  num_workers: 2
+  only_log_video_latents: true
+  skip_eval_sampling: true
+  save: ckpts_5b
+  save_interval: 500
+  split: 1,0,0
+  train_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0005_train_va.json
+  train_iters: 2000
+  valid_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0005_test_va.json
+data:
+  params:
+    fps: 8
+    max_num_frames: 33
+    skip_frms_num: 0
+    video_size:
+    - 480
+    - 720
+    sf_target_keys:
+    - keyframe_img_emb
+    - scene_text_emb
+    - flow_token_pca
+    - dyn_class_3
+    - motion_dir_8
+    - ofs_log_zscore
+    - temporal_frame_embs
+    - flow_mag_traj
+  target: data_video.BrainDataset
+deepspeed:
+  activation_checkpointing:
+    contiguous_memory_optimization: false
+    partition_activations: false
+  bf16:
+    enabled: true
+  fp16:
+    enabled: false
+  gradient_accumulation_steps: 2
+  gradient_clipping: 1.0
+  hysteresis: 2
+  loss_scale: 0
+  loss_scale_window: 400
+  min_loss_scale: 1
+  optimizer:
+    params:
+      betas:
+      - 0.9
+      - 0.95
+      eps: 1e-8
+      lr: 1.0e-5
+      weight_decay: 1e-4
+    type: Adam
+  steps_per_print: 50
+  train_micro_batch_size_per_gpu: 1
+  wall_clock_breakdown: false
+  zero_allow_untested_optimizer: true
+  zero_optimization:
+    allgather_bucket_size: 1000000000
+    contiguous_gradients: false
+    cpu_offload: false
+    load_from_fp32_weights: false
+    overlap_comm: true
+    reduce_bucket_size: 1000000000
+    reduce_scatter: true
+    stage: 2
+model:
+  lora_train: true
+  not_trainable_prefixes:
+  - all
+  # P1 freezing: slow + fast branches frozen, fusion (gate_net + t_emb_proj) trainable.
+  freeze_slow_branch: true
+  freeze_fast_branch: true
+  unfreeze_fusion: true
+  loss_fn_config:
+    params:
+      training_stage: joint
+      lambda_sf: 0.003
+      # PATH B — P1: TimeNoise off. Flip to true when advancing to P2.
+      use_path_b: true
+      path_b_t_emb_dim: 256
+      use_time_noise: false
+      sf_loss_config:
+        lambda_distill_cls: 0.2
+        lambda_distill_spatial: 0.2
+        lambda_temporal_delta: 1.0
+        lambda_temporal_abs: 0.2
+        lambda_flow_traj: 0.3
+        lambda_dyn: 0.1
+        lambda_struct: 0.5

@@ -1,0 +1,7 @@
+args:
+  experiment_name: sf_v1_stage1_sub04
+  train_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0004_train_va.json
+  valid_data:
+  - __LOCAL_CONFIG_DATASET_ROOT__/sub-0004_test_va.json
+  num_workers: 1

@@ -1,0 +1,14 @@
+# Copy this file to local_config.yaml and edit paths for your server.
+# local_config.yaml is in .gitignore and will not be committed.
+
+paths:
+  # CogVideoX-5B SAT format transformer checkpoint
+  transformer: /path/to/CogVideoX-5b-sat/transformer
+  # 3D VAE checkpoint
+  vae: /path/to/CogVideoX-5b-sat/vae/3d-vae.pt
+  # SigLIP2 vision encoder
+  siglip2: /path/to/models/google/siglip2-so400m-patch14-384
+  # Directory containing video clips (mp4 files)
+  video_dir: /path/to/datasets/videos
+  # Dataset root (contains sub-XXXX/, JSON files, captions)
+  dataset_root: /path/to/datasets
